@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import "../firebaseConfig";
 
 import { getApp } from "firebase/app";
@@ -69,7 +69,13 @@ export default function HostPage() {
           round: 1,
           updatedAt: serverTimestamp(),
         }).catch(() => {});
-        setState({ status: "waitingHost", hostFirstName: null, game: null, phase: "rules", round: 1 });
+        setState({
+          status: "waitingHost",
+          hostFirstName: null,
+          game: null,
+          phase: "rules",
+          round: 1,
+        });
       } else {
         const d = snap.data();
         setState({
@@ -107,14 +113,14 @@ export default function HostPage() {
   // —— Votes (live tally) ——
   const [voteRound, setVoteRound] = useState(1);
   const [votes, setVotes] = useState([]); // raw votes
-  const [tally, setTally] = useState([]); // [{targetFirstName, count}]
+  const [tally, setTally] = useState([]); // [{targetFirstName, count, display}]
   useEffect(() => {
     setVoteRound(state.round || 1);
   }, [state.round]);
 
   useEffect(() => {
     const qVotes = query(
-      collection(db, "meta", "votes"),
+      collection(db, "votes"), // top-level collection
       where("round", "==", voteRound),
       orderBy("at", "asc")
     );
@@ -132,7 +138,8 @@ export default function HostPage() {
         .map(([k, count]) => ({
           targetFirstName: k,
           count,
-          display: players.find((p) => p.firstName?.toLowerCase() === k)?.firstName || k,
+          display:
+            players.find((p) => p.firstName?.toLowerCase() === k)?.firstName || k,
         }))
         .sort((a, b) => b.count - a.count);
       setTally(grouped);
@@ -181,7 +188,9 @@ export default function HostPage() {
 
   async function killPlayer(firstName) {
     if (!isHost) return;
-    const target = players.find((p) => p.firstName?.toLowerCase() === firstName.toLowerCase());
+    const target = players.find(
+      (p) => p.firstName?.toLowerCase() === firstName.toLowerCase()
+    );
     if (!target) return;
     const ref = doc(db, "players", target.id);
     await updateDoc(ref, { alive: false }).catch(() => {});
@@ -189,7 +198,9 @@ export default function HostPage() {
 
   async function revivePlayer(firstName) {
     if (!isHost) return;
-    const target = players.find((p) => p.firstName?.toLowerCase() === firstName.toLowerCase());
+    const target = players.find(
+      (p) => p.firstName?.toLowerCase() === firstName.toLowerCase()
+    );
     if (!target) return;
     const ref = doc(db, "players", target.id);
     await updateDoc(ref, { alive: true }).catch(() => {});
@@ -202,7 +213,7 @@ export default function HostPage() {
 
   async function clearVotesForRound() {
     if (!isHost) return;
-    const qDel = query(collection(db, "meta", "votes"), where("round", "==", voteRound));
+    const qDel = query(collection(db, "votes"), where("round", "==", voteRound));
     const snap = await getDocs(qDel);
     const batch = writeBatch(db);
     snap.forEach((d) => batch.delete(d.ref));
@@ -271,7 +282,9 @@ export default function HostPage() {
                     <PrimaryBtn onClick={startGame}>Start Judas</PrimaryBtn>
                   )}
                   {state.status === "rules" && (
-                    <SecondaryBtn onClick={() => router.push("/play")}>Change Game</SecondaryBtn>
+                    <SecondaryBtn onClick={() => router.push("/play")}>
+                      Change Game
+                    </SecondaryBtn>
                   )}
                   {state.status === "inGame" && (
                     <>
@@ -324,7 +337,9 @@ export default function HostPage() {
               >
                 <h3 className="text-lg font-semibold">Players ({players.length})</h3>
                 {players.length === 0 ? (
-                  <p className="mt-2 text-sm text-white/70">Waiting for players to join on /play…</p>
+                  <p className="mt-2 text-sm text-white/70">
+                    Waiting for players to join on /play…
+                  </p>
                 ) : (
                   <ul className="mt-3 grid sm:grid-cols-2 gap-2">
                     {players.map((p) => (
@@ -345,7 +360,9 @@ export default function HostPage() {
                           </div>
                           <div className="flex items-center gap-1">
                             {p.alive ? (
-                              <DangerBtn onClick={() => killPlayer(p.firstName)}>Kill</DangerBtn>
+                              <DangerBtn onClick={() => killPlayer(p.firstName)}>
+                                Kill
+                              </DangerBtn>
                             ) : (
                               <SecondaryBtn onClick={() => revivePlayer(p.firstName)}>
                                 Revive
@@ -386,6 +403,43 @@ function Guard({ state }) {
         <Link href="/play" className="underline">/play</Link>.
       </p>
     </motion.div>
+  );
+}
+
+function RulesPanel({ game }) {
+  if (!game) {
+    return (
+      <div>
+        <h3 className="text-xl font-semibold">Choose a game</h3>
+        <p className="mt-2 text-sm text-white/75">
+          On your phone, open <b>/play</b> and pick a game. Players will see rules here.
+        </p>
+      </div>
+    );
+  }
+  if (game !== "judas") {
+    return (
+      <div>
+        <h3 className="text-xl font-semibold">Rules</h3>
+        <p className="mt-2 text-sm text-white/75">Rules for this game are coming soon.</p>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className="text-2xl">🕊️</div>
+      <h3 className="text-xl font-semibold mt-1">Judas (Biblical Mafia) — How to Play</h3>
+      <ul className="mt-3 text-sm text-white/80 space-y-2 list-disc list-inside">
+        <li>Roles are dealt secretly to phones (Judas, Angel, Peter, Mary, Luke, Disciples).</li>
+        <li>Night: Judas chooses; Angel may protect; seers discern.</li>
+        <li>Day: reveal event, discuss kindly, then vote to accuse or spare.</li>
+        <li>Resolution: eliminate or spare; repeat rounds until win condition.</li>
+        <li>Win: all Judas eliminated — or Judas count ≥ villagers.</li>
+      </ul>
+      <p className="mt-3 text-xs text-white/60">
+        Accessibility: role = color + icon + pattern (never color-only).
+      </p>
+    </div>
   );
 }
 
@@ -667,11 +721,17 @@ function GradientFog() {
     <div className="absolute inset-0 -z-10 pointer-events-none">
       <div
         className="absolute -top-24 -left-24 w-[520px] h-[520px] rounded-full opacity-40 blur-[120px]"
-        style={{ background: "radial-gradient(50% 50% at 50% 50%, #1F6FEB 0%, rgba(31,111,235,0) 70%)" }}
+        style={{
+          background:
+            "radial-gradient(50% 50% at 50% 50%, #1F6FEB 0%, rgba(31,111,235,0) 70%)",
+        }}
       />
       <div
         className="absolute -bottom-24 -right-24 w-[520px] h-[520px] rounded-full opacity-40 blur-[120px]"
-        style={{ background: "radial-gradient(50% 50% at 50% 50%, #FF7A18 0%, rgba(255,122,24,0) 70%)" }}
+        style={{
+          background:
+            "radial-gradient(50% 50% at 50% 50%, #FF7A18 0%, rgba(255,122,24,0) 70%)",
+        }}
       />
     </div>
   );
