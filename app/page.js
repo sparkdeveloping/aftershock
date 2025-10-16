@@ -1,103 +1,334 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import Image from "next/image";
+import { motion, AnimatePresence } from "framer-motion";
+import "./firebaseConfig"; // client-side init
 
-export default function Home() {
+export default function Page() {
+  const lines = useMemo(
+    () => [
+      "Welcome to Aftershock Bible Study",
+      "We gather to know Jesus and one another.",
+      "Reverent fun · communal hype · sacred + playful.",
+      "Tap Play to join the game. Use QR as needed.",
+    ],
+    []
+  );
+
+  const [index, setIndex] = useState(0);
+  const [qrTab, setQrTab] = useState("housekeeping"); // <-- plain JS
+
+  useEffect(() => {
+    const id = setInterval(() => setIndex((i) => (i + 1) % lines.length), 2800);
+    return () => clearInterval(id);
+  }, [lines.length]);
+
+  const qrMeta =
+    qrTab === "housekeeping"
+      ? {
+          title: "Housekeeping Form",
+          subtitle: "Scan for Aftershock housekeeping (not for game join)",
+          img: "/WelcomeCode.png",
+          alt: "Aftershock Housekeeping Form (Google Form) QR",
+        }
+      : {
+          title: "Game Join (opens /play)",
+          subtitle: "Scan to open the Play screen on your phone",
+          img: "/GameJoin.png",
+          alt: "Aftershock Game Join QR — opens /play",
+        };
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="relative min-h-dvh isolate overflow-hidden bg-[#0B1020] text-white">
+      <style>{`
+        :root{
+          --ink-900:#0B1020; --ink-800:#131A2A; --ink-100:#EAF0FF;
+          --orange-500:#FF7A18; --orange-400:#FF9E3D; --orange-300:#FFB65E;
+          --blue-400:#3BA0F2; --blue-600:#1F6FEB; --blue-700:#0E4CC5;
+          --grad-primary: linear-gradient(135deg, #FF7A18 0%, #FFB65E 35%, #3BA0F2 70%, #1F6FEB 100%);
+        }
+        .glass {
+          background: rgba(255,255,255,.08);
+          border: 1px solid rgba(255,255,255,.12);
+          box-shadow: 0 20px 60px rgba(16,35,80,.25), inset 0 1px 0 rgba(255,255,255,.08);
+          backdrop-filter: blur(18px);
+        }
+        .ring-glow { box-shadow: 0 0 40px rgba(59,160,242,.35), 0 0 40px rgba(255,122,24,.25) inset; }
+        .grad-text {
+          background: var(--grad-primary);
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+        }
+      `}</style>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+      <AmbientBokeh />
+      <GradientFog />
+
+      <section className="relative z-10 min-h-dvh flex items-center justify-center px-4">
+        <motion.div
+          className="glass ring-glow rounded-3xl w-full max-w-5xl p-6 sm:p-10"
+          initial={{ y: 16, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          <div className="grid gap-8 lg:grid-cols-2 items-center">
+            {/* Left */}
+            <div className="text-center lg:text-left">
+              <div className="inline-flex items-center justify-center lg:justify-start px-4 py-1.5 mb-4 rounded-full bg-white/5 border border-white/10 text-xs tracking-wide uppercase">
+                Aftershock Game Hub
+              </div>
+
+              <h1 className="text-5xl md:text-7xl font-semibold tracking-[-0.02em] leading-tight grad-text">
+                Welcome to Aftershock <br className="hidden md:block" />
+                Bible Study
+              </h1>
+
+              <div className="mt-5 h-[32px] md:h-[36px] relative overflow-hidden">
+                <AnimatePresence mode="wait">
+                  <motion.p
+                    key={index}
+                    className="text-base md:text-lg text-white/80"
+                    initial={{ y: 16, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: -12, opacity: 0 }}
+                    transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    {lines[index]}
+                  </motion.p>
+                </AnimatePresence>
+              </div>
+
+              <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md mx-auto lg:mx-0">
+                <LiftButton href="/play" label="Play Game" />
+                <LiftButton href="/admin" label="Admin" variant="ghost" />
+              </div>
+
+              <p className="mt-6 text-xs text-white/55 text-center lg:text-left">
+                Keep this on the projector. Players tap <strong>Play</strong> on their phones.
+                Use the QR switch on the right to show the right code.
+              </p>
+            </div>
+
+            {/* Right: QR card with capsule switch */}
+            <motion.div
+              className="relative mx-auto w-full max-w-sm"
+              initial={{ scale: 0.98, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
+            >
+              <div className="glass rounded-3xl p-6 border border-white/10">
+                {/* Capsule switch using layoutId pill */}
+                <div
+                  role="tablist"
+                  aria-label="QR mode"
+                  className="relative mb-4 grid grid-cols-2 gap-2 p-1 rounded-full bg-white/6 border border-white/10"
+                  style={{ background: "rgba(255,255,255,.06)" }}
+                >
+                  <CapsuleButton
+                    selected={qrTab === "housekeeping"}
+                    onClick={() => setQrTab("housekeeping")}
+                  >
+                    Housekeeping
+                  </CapsuleButton>
+                  <CapsuleButton
+                    selected={qrTab === "play"}
+                    onClick={() => setQrTab("play")}
+                  >
+                    Game Join
+                  </CapsuleButton>
+                </div>
+
+                {/* QR frame */}
+                <div className="aspect-square rounded-2xl overflow-hidden bg-white/3 border border-white/10 relative">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={qrTab}
+                      className="absolute inset-0 p-3"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -12 }}
+                      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      <Image
+                        src={qrMeta.img}
+                        alt={qrMeta.alt}
+                        width={768}
+                        height={768}
+                        className="w-full h-full object-contain"
+                        priority
+                      />
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+
+                <div className="mt-4 text-center">
+                  <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-wide text-white/75 bg-white/5 border border-white/10 rounded-full px-3 py-1">
+                    <span>{qrMeta.title}</span>
+                  </div>
+                  <div className="mt-2 text-sm text-white/80">{qrMeta.subtitle}</div>
+
+                  {qrTab === "play" && (
+                    <div className="mt-3">
+                      <Link
+                        href="/play"
+                        className="text-xs text-white/80 underline hover:text-white"
+                      >
+                        or open /play directly
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </motion.div>
+      </section>
+
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-white/5 to-transparent"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2, duration: 0.6 }}
+      />
+    </main>
+  );
+}
+
+/* ——— small components ——— */
+
+function CapsuleButton({ selected, onClick, children }) {
+  return (
+    <button
+      role="tab"
+      aria-selected={selected}
+      onClick={onClick}
+      className="relative z-0 flex items-center justify-center rounded-full py-2 text-[12px] font-semibold tracking-wide text-white/90"
+    >
+      {selected && (
+        <motion.span
+          layoutId="pill"
+          className="absolute inset-0 rounded-full"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(255,122,24,.35), rgba(59,160,242,.35))",
+          }}
+          transition={{ type: "spring", stiffness: 320, damping: 28, mass: 0.6 }}
+        />
+      )}
+      <span className="relative">{children}</span>
+    </button>
+  );
+}
+
+function LiftButton({ href, label, variant = "solid" }) {
+  const base =
+    "relative inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold tracking-[-0.01em] transition-transform will-change-transform";
+  const solid =
+    "bg-white/10 border border-white/15 hover:translate-y-[-2px] hover:shadow-xl active:translate-y-[1px]";
+  const ghost =
+    "bg-transparent border border-white/10 hover:bg-white/5 hover:translate-y-[-2px] active:translate-y-[1px]";
+
+  return (
+    <motion.div whileTap={{ scale: 0.98 }} whileHover={{ y: -4 }}>
+      <Link
+        href={href}
+        className={`${base} ${variant === "solid" ? solid : ghost}`}
+        style={{ boxShadow: "0 0 40px rgba(59,160,242,.25)" }}
+      >
+        <span
+          className="absolute inset-0 rounded-2xl"
+          style={{
+            background:
+              "radial-gradient(120% 120% at 0% 0%, rgba(255,122,24,.25), transparent 60%)",
+          }}
+          aria-hidden
+        />
+        <span className="relative">{label}</span>
+      </Link>
+    </motion.div>
+  );
+}
+
+function AmbientBokeh() {
+  const dots = useMemo(
+    () =>
+      Array.from({ length: 18 }).map((_, i) => ({
+        id: i,
+        size: 120 + (i % 5) * 28,
+        x: (i * 53) % 100,
+        y: (i * 29) % 100,
+        delay: (i % 7) * 0.35,
+        duration: 10 + (i % 6) * 2.5,
+      })),
+    []
+  );
+
+  return (
+    <div className="absolute inset-0 -z-10 overflow-hidden">
+      <div
+        aria-hidden
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(120% 100% at 0% 0%, rgba(31,111,235,.15), transparent 55%), radial-gradient(120% 100% at 100% 100%, rgba(255,122,24,.18), transparent 55%), linear-gradient(180deg, #0B1020 0%, #0B1020 100%)",
+        }}
+      />
+      <div
+        className="absolute inset-0 opacity-[0.08] mix-blend-overlay pointer-events-none"
+        style={{
+          backgroundImage:
+            "url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%23100% height=%23100%><filter id=%22n%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%222%22 stitchTiles=%22stitch%22/></filter><rect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/></svg>')",
+        }}
+      />
+      {dots.map((d) => (
+        <motion.span
+          key={d.id}
+          className="absolute rounded-full blur-3xl"
+          style={{
+            width: d.size,
+            height: d.size,
+            left: `${d.x}%`,
+            top: `${d.y}%`,
+            background:
+              d.id % 2 === 0
+                ? "radial-gradient(circle at 30% 30%, rgba(59,160,242,.55), rgba(59,160,242,0))"
+                : "radial-gradient(circle at 70% 70%, rgba(255,122,24,.55), rgba(255,122,24,0))",
+          }}
+          initial={{ y: 0, opacity: 0.6 }}
+          animate={{ y: [0, -16, 0], opacity: [0.6, 0.85, 0.6] }}
+          transition={{
+            repeat: Infinity,
+            duration: d.duration,
+            delay: d.delay,
+            ease: "easeInOut",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function GradientFog() {
+  return (
+    <div className="absolute inset-0 -z-10 pointer-events-none">
+      <div
+        className="absolute -top-24 -left-24 w-[520px] h-[520px] rounded-full opacity-40 blur-[120px]"
+        style={{
+          background:
+            "radial-gradient(50% 50% at 50% 50%, #1F6FEB 0%, rgba(31,111,235,0) 70%)",
+        }}
+      />
+      <div
+        className="absolute -bottom-24 -right-24 w-[520px] h-[520px] rounded-full opacity-40 blur-[120px]"
+        style={{
+          background:
+            "radial-gradient(50% 50% at 50% 50%, #FF7A18 0%, rgba(255,122,24,0) 70%)",
+        }}
+      />
     </div>
   );
 }
