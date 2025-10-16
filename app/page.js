@@ -10,7 +10,7 @@ export default function Page() {
   const lines = useMemo(
     () => [
       "Welcome to Aftershock Bible Study",
-      "We gather to know Jesus and one another.",
+      "To help Students find their true purpose through the Word of God",
       "Reverent fun · communal hype · sacred + playful.",
       "Tap Play to join the game. Use QR as needed.",
     ],
@@ -18,7 +18,7 @@ export default function Page() {
   );
 
   const [index, setIndex] = useState(0);
-  const [qrTab, setQrTab] = useState("housekeeping"); // <-- plain JS
+  const [qrTab, setQrTab] = useState("new"); // default to "new"
 
   useEffect(() => {
     const id = setInterval(() => setIndex((i) => (i + 1) % lines.length), 2800);
@@ -26,12 +26,12 @@ export default function Page() {
   }, [lines.length]);
 
   const qrMeta =
-    qrTab === "housekeeping"
+    qrTab === "new"
       ? {
-          title: "Housekeeping Form",
-          subtitle: "Scan for Aftershock housekeeping (not for game join)",
+          title: "New Form",
+          subtitle: "Scan for if this is your first time here :)",
           img: "/WelcomeCode.png",
-          alt: "Aftershock Housekeeping Form (Google Form) QR",
+          alt: "Aftershock New/Housekeeping Form (Google Form) QR",
         }
       : {
           title: "Game Join (opens /play)",
@@ -39,6 +39,9 @@ export default function Page() {
           img: "/GameJoin.png",
           alt: "Aftershock Game Join QR — opens /play",
         };
+
+  const showGameButtons = qrTab === "play";
+  const showInSessionBanner = qrTab === "new";
 
   return (
     <main className="relative min-h-dvh isolate overflow-hidden bg-[#0B1020] text-white">
@@ -77,8 +80,8 @@ export default function Page() {
           <div className="grid gap-8 lg:grid-cols-2 items-center">
             {/* Left */}
             <div className="text-center lg:text-left">
-              <div className="inline-flex items-center justify-center lg:justify-start px-4 py-1.5 mb-4 rounded-full bg-white/5 border border-white/10 text-xs tracking-wide uppercase">
-                Aftershock Game Hub
+              <div className="inline-flex items-center justify-center lg:justify-start px-4 py-1.5 mb-4 rounded-full bg-white/5 border border-white/10 text-[10px] md:text-xs tracking-wide uppercase">
+                ON WICHITA STATE AS IT IS IN HEAVEN
               </div>
 
               <h1 className="text-5xl md:text-7xl font-semibold tracking-[-0.02em] leading-tight grad-text">
@@ -101,15 +104,29 @@ export default function Page() {
                 </AnimatePresence>
               </div>
 
-              <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md mx-auto lg:mx-0">
-                <LiftButton href="/play" label="Play Game" />
-                <LiftButton href="/admin" label="Admin" variant="ghost" />
-              </div>
+              {/* Session banner or Action buttons */}
+              {showInSessionBanner ? (
+                <div className="mt-8">
+                  <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-white/8 border border-white/15 text-xs md:text-sm font-semibold tracking-wide">
+                    <span
+                      className="inline-block h-2 w-2 rounded-full"
+                      style={{ backgroundColor: "#14D1A4" }}
+                    />
+                    BIBLE STUDY IS IN SESSION
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md mx-auto lg:mx-0">
+                  {showGameButtons && (
+                    <>
+                      <LiftButton href="/play" label="Play Game" />
+                      <LiftButton href="/admin" label="Admin" variant="ghost" />
+                    </>
+                  )}
+                </div>
+              )}
 
-              <p className="mt-6 text-xs text-white/55 text-center lg:text-left">
-                Keep this on the projector. Players tap <strong>Play</strong> on their phones.
-                Use the QR switch on the right to show the right code.
-              </p>
+             
             </div>
 
             {/* Right: QR card with capsule switch */}
@@ -120,7 +137,7 @@ export default function Page() {
               transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
             >
               <div className="glass rounded-3xl p-6 border border-white/10">
-                {/* Capsule switch using layoutId pill */}
+                {/* Capsule switch */}
                 <div
                   role="tablist"
                   aria-label="QR mode"
@@ -128,10 +145,10 @@ export default function Page() {
                   style={{ background: "rgba(255,255,255,.06)" }}
                 >
                   <CapsuleButton
-                    selected={qrTab === "housekeeping"}
-                    onClick={() => setQrTab("housekeeping")}
+                    selected={qrTab === "new"}
+                    onClick={() => setQrTab("new")}
                   >
-                    Housekeeping
+                    New
                   </CapsuleButton>
                   <CapsuleButton
                     selected={qrTab === "play"}
@@ -172,12 +189,7 @@ export default function Page() {
 
                   {qrTab === "play" && (
                     <div className="mt-3">
-                      <Link
-                        href="/play"
-                        className="text-xs text-white/80 underline hover:text-white"
-                      >
-                        or open /play directly
-                      </Link>
+                      
                     </div>
                   )}
                 </div>
