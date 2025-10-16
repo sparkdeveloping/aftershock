@@ -12,15 +12,16 @@ import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import {
   getFirestore,
   addDoc,
+  setDoc,
+  updateDoc,
+  getDocs,
+  serverTimestamp,
   collection,
   query,
   where,
-  getDocs,
-  doc,
+  orderBy,
   onSnapshot,
-  setDoc,
-  updateDoc,
-  serverTimestamp,
+  doc,
 } from "firebase/firestore";
 
 export default function PlayPage() {
@@ -39,33 +40,44 @@ export default function PlayPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  // —— Global state doc (chosen host, status, game) ——
-  const [state, setState] = useState({ status: "waitingHost", hostFirstName: null, game: null });
+  // —— Global state doc (host, status, game, phase, round) ——
+  const [state, setState] = useState({
+    status: "waitingHost",
+    hostFirstName: null,
+    game: null,
+    phase: "rules",
+    round: 1,
+  });
 
-  // —— Host detection (case-insensitive) ——
+  // —— Players list (to render vote options & find "me") ——
+  const [players, setPlayers] = useState([]);
+  const me = useMemo(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return null;
+    return players.find((p) => p.uid === uid && p.firstName?.toLowerCase() === firstName.toLowerCase()) || null;
+  }, [players, auth.currentUser, firstName]);
+
+  // —— Host detection ——
   const isHost =
     firstName &&
     state.hostFirstName &&
     firstName.toLowerCase() === String(state.hostFirstName).toLowerCase();
 
-  // —— Auth (anon ok) ——
+  // —— Auth (anon ok) & rehydrate joined ——
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         try {
           await signInAnonymously(auth);
         } catch {}
-      } else {
-        // If we already stored name earlier, mark joined if a matching player doc exists
-        if (firstName) {
-          const q = query(
-            collection(db, "players"),
-            where("uid", "==", user.uid),
-            where("firstName", "==", firstName)
-          );
-          const snap = await getDocs(q);
-          setJoined(!snap.empty);
-        }
+      } else if (firstName) {
+        const q = query(
+          collection(db, "players"),
+          where("uid", "==", user.uid),
+          where("firstName", "==", firstName)
+        );
+        const snap = await getDocs(q);
+        setJoined(!snap.empty);
       }
     });
     return () => unsub();
@@ -76,15 +88,35 @@ export default function PlayPage() {
     const ref = doc(db, "meta", "state");
     const unsub = onSnapshot(ref, async (snap) => {
       if (!snap.exists()) {
-        await setDoc(ref, { status: "waitingHost", updatedAt: serverTimestamp() }).catch(() => {});
-        setState({ status: "waitingHost", hostFirstName: null, game: null });
+        await setDoc(ref, {
+          status: "waitingHost",
+          game: null,
+          phase: "rules",
+          round: 1,
+          updatedAt: serverTimestamp(),
+        }).catch(() => {});
+        setState({ status: "waitingHost", hostFirstName: null, game: null, phase: "rules", round: 1 });
       } else {
+        const d = snap.data();
         setState({
-          status: snap.data().status ?? "waitingHost",
-          hostFirstName: snap.data().hostFirstName ?? null,
-          game: snap.data().game ?? null,
+          status: d.status ?? "waitingHost",
+          hostFirstName: d.hostFirstName ?? null,
+          game: d.game ?? null,
+          phase: d.phase ?? "rules",
+          round: d.round ?? 1,
         });
       }
+    });
+    return () => unsub();
+  }, [db]);
+
+  // —— Subscribe players ——
+  useEffect(() => {
+    const qPlayers = query(collection(db, "players"), orderBy("joinedAt", "asc"));
+    const unsub = onSnapshot(qPlayers, (snap) => {
+      const list = [];
+      snap.forEach((d) => list.push({ id: d.id, alive: true, ...d.data() }));
+      setPlayers(list.map((p) => ({ ...p, alive: p.alive !== false })));
     });
     return () => unsub();
   }, [db]);
@@ -96,7 +128,6 @@ export default function PlayPage() {
     const name = firstName.trim();
     if (!name) return setError("First name is required.");
     if (name.length > 24) return setError("Keep it under 24 characters.");
-
     try {
       setBusy(true);
       const user = auth.currentUser ?? (await signInAnonymously(auth)).user;
@@ -106,6 +137,7 @@ export default function PlayPage() {
         uid: user.uid,
         joinedAt: serverTimestamp(),
         status: "idle",
+        alive: true,
       });
 
       if (typeof window !== "undefined") localStorage.setItem("firstName", name);
@@ -124,21 +156,75 @@ export default function PlayPage() {
     }
   }
 
-  // —— Host chooses game (only active: Judas) ——
+  // —— Host chooses game (only Judas for now) ——
   async function chooseGame(game) {
     if (!isHost) return;
     try {
       const ref = doc(db, "meta", "state");
       await updateDoc(ref, {
         game,
-        status: "rules", // show rules to everyone; host will start later
+        status: "rules",
+        phase: "rules",
         updatedAt: serverTimestamp(),
       });
-      // Nudge host toward control room
-      setTimeout(() => router.push("/host"), 400);
+      setTimeout(() => router.push("/host"), 300);
     } catch (e) {
       console.error(e);
-      setError("Couldn’t set game. Check Firestore rules for /meta/state writes.");
+      setError("Couldn’t set game. Check /meta/state write rules.");
+    }
+  }
+
+  // —— Voting (one vote per round per voter) ——
+  const [voteBusy, setVoteBusy] = useState(false);
+  const [voteMsg, setVoteMsg] = useState("");
+  const [voteTarget, setVoteTarget] = useState("");
+  const [roleGuess, setRoleGuess] = useState("");
+
+  async function submitVote() {
+    if (!auth.currentUser) return;
+    if (!me || !me.alive) {
+      setVoteMsg("You are out — cannot vote.");
+      return;
+    }
+    if (!voteTarget) {
+      setVoteMsg("Pick a player to vote for.");
+      return;
+    }
+    try {
+      setVoteBusy(true);
+      const voterUid = auth.currentUser.uid;
+      const round = state.round || 1;
+
+      // Upsert: find an existing vote by you for this round
+      const qExisting = query(
+        collection(db, "meta", "votes"),
+        where("voterUid", "==", voterUid),
+        where("round", "==", round)
+      );
+      const existing = await getDocs(qExisting);
+      if (!existing.empty) {
+        // Update the first found
+        await updateDoc(existing.docs[0].ref, {
+          targetFirstName: voteTarget,
+          roleGuess: roleGuess || null,
+          at: serverTimestamp(),
+        });
+      } else {
+        await addDoc(collection(db, "meta", "votes"), {
+          round,
+          voterUid,
+          targetFirstName: voteTarget,
+          roleGuess: roleGuess || null,
+          at: serverTimestamp(),
+        });
+      }
+      setVoteMsg("Vote submitted ✅");
+      setTimeout(() => setVoteMsg(""), 1400);
+    } catch (e) {
+      console.error(e);
+      setVoteMsg("Vote failed. Try again.");
+    } finally {
+      setVoteBusy(false);
     }
   }
 
@@ -146,7 +232,7 @@ export default function PlayPage() {
   const lines = useMemo(
     () => [
       "Quick Join — first name only",
-      "Admin will pick a host",
+      "Admin picks a host",
       "Be kind · have fun · play fair",
     ],
     []
@@ -157,7 +243,10 @@ export default function PlayPage() {
     return () => clearInterval(id);
   }, [lines.length]);
 
-  // ————————————————— UI —————————————————
+  const alivePlayers = players.filter((p) => p.alive);
+  const isInRules = state.status === "rules" && state.game;
+  const isInGame = state.status === "inGame" && state.game;
+
   return (
     <main className="relative min-h-dvh isolate overflow-hidden bg-[#0B1020] text-white">
       <StyleTokens />
@@ -180,7 +269,7 @@ export default function PlayPage() {
             </Link>
           </div>
 
-          {/* 1) Not joined yet: show join form */}
+          {/* 1) Not joined yet */}
           {!joined ? (
             <>
               <h1 className="text-4xl md:text-5xl font-semibold tracking-[-0.02em] grad-text">
@@ -244,40 +333,129 @@ export default function PlayPage() {
             </>
           ) : (
             <>
-              {/* 2) Joined — Host vs Player views */}
+              {/* 2) Joined — show dashboards */}
               <header className="mb-6">
                 <h1 className="text-3xl md:text-4xl font-semibold tracking-[-0.02em]">
                   Hi, <span className="grad-text">{firstName}</span>
                 </h1>
-                {isHost ? (
-                  <p className="mt-2 text-white/75 text-sm">
-                    You’re the host. Choose a game below.{" "}
-                    <Link href="/host" className="underline text-white/90">
-                      Open host controls
-                    </Link>
-                    .
-                  </p>
-                ) : state.status === "waitingHost" ? (
+                {!state.hostFirstName && (
                   <p className="mt-2 text-white/75 text-sm">Waiting for an admin to choose a host…</p>
-                ) : state.status === "waitingStart" ? (
+                )}
+                {state.hostFirstName && !isHost && state.status === "waitingStart" && (
                   <p className="mt-2 text-white/75 text-sm">
                     Host selected — waiting for host to choose a game…
                   </p>
-                ) : state.status === "rules" && state.game ? (
-                  <p className="mt-2 text-white/75 text-sm">
-                    {displayGameName(state.game)} selected — review the rules below. Waiting for the
-                    host to start the game.
+                )}
+                {isHost && (
+                  <p className="mt-2 text-white/80 text-sm">
+                    You’re the host —{" "}
+                    <Link href="/host" className="underline text-white">open host controls</Link>.
                   </p>
-                ) : null}
+                )}
               </header>
 
-              {/* Host: show Game Grid */}
-              {isHost ? (
+              {/* Host game grid (on phone) */}
+              {isHost && state.status === "waitingStart" && (
                 <GameGrid onChoose={chooseGame} />
-              ) : state.status === "rules" && state.game ? (
-                <RulesCard game={state.game} />
-              ) : (
-                <WaitingCard status={state.status} />
+              )}
+
+              {/* Rules visible to all when a game picked */}
+              {isInRules && <RulesCard game={state.game} />}
+
+              {/* In-game panels: phase-aware */}
+              {isInGame && (
+                <div className="mt-6 grid gap-6">
+                  {/* Alive/Out notice */}
+                  {!me?.alive && (
+                    <div className="rounded-2xl border border-white/10 bg-white/8 p-4 text-sm text-white/80">
+                      You’re <b>out</b> this round. Chat kindly; no voting.
+                    </div>
+                  )}
+
+                  {state.phase === "night" && (
+                    <div className="rounded-2xl border border-white/10 bg-white/8 p-6">
+                      <h3 className="text-xl font-semibold">Night</h3>
+                      <p className="mt-2 text-sm text-white/75">
+                        Night actions happen silently. Rest, observe, and wait for the Day reveal.
+                      </p>
+                    </div>
+                  )}
+
+                  {state.phase === "day" && (
+                    <div className="rounded-2xl border border-white/10 bg-white/8 p-6">
+                      <h3 className="text-xl font-semibold">Day</h3>
+                      <p className="mt-2 text-sm text-white/75">
+                        Discuss kindly. Prepare to vote when the host opens the Vote phase.
+                      </p>
+                    </div>
+                  )}
+
+                  {state.phase === "vote" && (
+                    <div className="rounded-2xl border border-white/10 bg-white/8 p-6">
+                      <h3 className="text-xl font-semibold">Vote</h3>
+                      <p className="mt-2 text-sm text-white/75">
+                        Choose who you believe is Judas (or a role). One vote per round; you can change it until the host resolves.
+                      </p>
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-[2fr,1fr]">
+                        <div>
+                          <label className="text-sm text-white/80">Pick a player</label>
+                          <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {alivePlayers.length === 0 && (
+                              <div className="text-sm text-white/70">No alive players.</div>
+                            )}
+                            {alivePlayers.map((p) => (
+                              <button
+                                key={p.id}
+                                disabled={!me?.alive}
+                                onClick={() => setVoteTarget(p.firstName)}
+                                className={`rounded-xl px-3 py-2 text-sm border ${
+                                  voteTarget === p.firstName
+                                    ? "bg-white/15 border-white/30"
+                                    : "bg-white/8 border-white/12 hover:bg-white/12"
+                                } disabled:opacity-60`}
+                              >
+                                {p.firstName}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-sm text-white/80">Optional role guess</label>
+                          <select
+                            value={roleGuess}
+                            onChange={(e) => setRoleGuess(e.target.value)}
+                            disabled={!me?.alive}
+                            className="mt-2 w-full rounded-xl bg-white/10 border border-white/15 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#7CD4FD]"
+                          >
+                            <option value="">— None —</option>
+                            <option>Judas</option>
+                            <option>Angel</option>
+                            <option>Peter</option>
+                            <option>Mary</option>
+                            <option>Luke</option>
+                            <option>Disciple</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="mt-4">
+                        <motion.button
+                          whileTap={{ scale: 0.98 }}
+                          whileHover={{ y: -2 }}
+                          disabled={!me?.alive || voteBusy}
+                          onClick={submitVote}
+                          className="rounded-2xl px-4 py-2 text-sm font-semibold bg-white/10 border border-white/15 hover:shadow disabled:opacity-60"
+                          style={{ boxShadow: "0 0 20px rgba(59,160,242,.2)" }}
+                        >
+                          {voteBusy ? "Submitting…" : "Submit Vote"}
+                        </motion.button>
+                        {voteMsg && <div className="mt-2 text-sm text-white/80">{voteMsg}</div>}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </>
           )}
@@ -287,7 +465,7 @@ export default function PlayPage() {
   );
 }
 
-/* ——— Game grid (Host) ——— */
+/* ——— Game grid (Host on /play) ——— */
 function GameGrid({ onChoose }) {
   const cards = [
     {
@@ -337,55 +515,33 @@ function GameGrid({ onChoose }) {
   );
 }
 
-/* ——— Rules card (Players & Host after choose) ——— */
+/* ——— Rules card ——— */
 function RulesCard({ game }) {
   if (game !== "judas") {
     return (
-      <div className="rounded-2xl border border-white/10 bg-white/8 p-6">
+      <div className="rounded-2xl border border-white/10 bg-white/8 p-6 mt-6">
         <h3 className="text-xl font-semibold">Rules</h3>
-        <p className="mt-2 text-white/75 text-sm">Rules for {displayGameName(game)} coming soon.</p>
+        <p className="mt-2 text-white/75 text-sm">Rules for this game are coming soon.</p>
       </div>
     );
   }
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/8 p-6">
+    <div className="rounded-2xl border border-white/10 bg-white/8 p-6 mt-6">
       <div className="text-2xl">🕊️</div>
-      <h3 className="mt-2 text-xl font-semibold">Judas (Biblical Mafia) — How to Play</h3>
+      <h3 className="text-xl font-semibold mt-1">Judas (Biblical Mafia) — How to Play</h3>
       <ul className="mt-3 text-sm text-white/80 space-y-2 list-disc list-inside">
         <li>Roles are dealt secretly to phones (Judas, Angel, Peter, Mary, Luke, Disciples).</li>
-        <li>Night: Judas chooses a target; Angel may protect; seer roles discern.</li>
-        <li>Day: event revealed, discuss kindly; then vote to accuse or spare.</li>
-        <li>Resolution: eliminate or spare; continue rounds until a win condition.</li>
+        <li>Night: Judas chooses a target; Angel may protect; seers discern.</li>
+        <li>Day: reveal event, discuss kindly; then vote to accuse or spare.</li>
+        <li>Resolution: eliminate or spare; repeat rounds until a win condition.</li>
         <li>Win: all Judas eliminated — or Judas count ≥ villagers.</li>
       </ul>
       <p className="mt-3 text-xs text-white/60">
-        Tone: respectful & scripture-adjacent. Identify roles by icon + pattern (not color only).
+        Tone: respectful & scripture-adjacent. Role identity uses icon + pattern (never color-only).
       </p>
       <div className="mt-4 text-sm text-white/75">Waiting for host to start the game…</div>
     </div>
   );
-}
-
-/* ——— Waiting states (non-host) ——— */
-function WaitingCard({ status }) {
-  const msg =
-    status === "waitingHost"
-      ? "Waiting for an admin to choose a host…"
-      : "Host selected — waiting for host to choose a game…";
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/8 p-6">
-      <h3 className="text-xl font-semibold">Lobby</h3>
-      <p className="mt-2 text-white/75 text-sm">{msg}</p>
-    </div>
-  );
-}
-
-/* ——— utils ——— */
-function displayGameName(key) {
-  if (key === "judas") return "Judas (Biblical Mafia)";
-  if (key === "trivia") return "Trivia";
-  if (key === "empire") return "Empire";
-  return key;
 }
 
 /* ——— Aesthetic helpers ——— */
