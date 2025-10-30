@@ -1,12 +1,34 @@
+// app/page.jsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import "./firebaseConfig"; // client-side init
+import "./firebaseConfig";
+
+import {
+  getFirestore,
+  collection,
+  onSnapshot,
+  orderBy,
+  limit as fsLimit,
+  query,
+} from "firebase/firestore";
+
+/**
+ * PROJECTOR START SCREEN (Aftershock)
+ * - Animated aurora background + particles
+ * - Rotating headline lines
+ * - QR switcher (New, Game Join, Bible Verse, GroupMe)
+ * - Verse ticker: cycles recent submissions from Firestore 'verses'
+ * - Shows Play/Admin buttons ONLY on "Game Join"
+ * - Shows "BIBLE STUDY IS IN SESSION" pill ONLY on "New"
+ * - Shows @wsuaftershock handle
+ */
 
 export default function Page() {
+  const db = useMemo(() => getFirestore(), []);
   const lines = useMemo(
     () => [
       "Welcome to Aftershock Bible Study",
@@ -18,69 +40,94 @@ export default function Page() {
   );
 
   const [index, setIndex] = useState(0);
-  const [qrTab, setQrTab] = useState("new"); // default to "new"
+  const [qrTab, setQrTab] = useState("new"); // "new" | "play" | "verse" | "groupme"
+
+  // Verse feed
+  const [verses, setVerses] = useState([]); // [{text, reference, name}]
+  const [vIx, setVIx] = useState(0);
 
   useEffect(() => {
-    const id = setInterval(() => setIndex((i) => (i + 1) % lines.length), 2800);
+    const id = setInterval(() => setIndex((i) => (i + 1) % lines.length), 3200);
     return () => clearInterval(id);
   }, [lines.length]);
+
+  useEffect(() => {
+    // live pull recent verses
+    const qV = query(
+      collection(db, "verses"),
+      orderBy("createdAt", "desc"),
+      fsLimit(25)
+    );
+    const unsub = onSnapshot(qV, (snap) => {
+      const rows = [];
+      snap.forEach((d) => rows.push({ id: d.id, ...d.data() }));
+      setVerses(rows);
+      setVIx(0);
+    });
+    return () => unsub();
+  }, [db]);
+
+  useEffect(() => {
+    if (verses.length === 0) return;
+    const id = setInterval(
+      () => setVIx((i) => (i + 1) % verses.length),
+      7000
+    );
+    return () => clearInterval(id);
+  }, [verses.length]);
+
+  const v = verses[vIx] || null;
 
   const qrMeta =
     qrTab === "new"
       ? {
           title: "New Form",
-          subtitle: "Scan for if this is your first time here :)",
+          subtitle: "Scan if this is your first time here :)",
           img: "/WelcomeCode.png",
-          alt: "Aftershock New/Housekeeping Form (Google Form) QR",
+          alt: "Aftershock New/Housekeeping Form QR",
         }
-      : {
+      : qrTab === "play"
+      ? {
           title: "Game Join (opens /play)",
           subtitle: "Scan to open the Play screen on your phone",
           img: "/GameJoin.png",
           alt: "Aftershock Game Join QR — opens /play",
+        }
+      : qrTab === "verse"
+      ? {
+          title: "Bible Verse",
+          subtitle: "Scan to submit your favorite Bible verse",
+          img: "/BibleVerse.png",
+          alt: "Submit a Bible Verse QR",
+        }
+      : {
+          title: "GroupMe",
+          subtitle: "Scan to join our GroupMe",
+          img: "/GroupMe.png",
+          alt: "Aftershock GroupMe QR",
         };
 
   const showGameButtons = qrTab === "play";
   const showInSessionBanner = qrTab === "new";
 
   return (
-    <main className="relative min-h-dvh isolate overflow-hidden bg-[#0B1020] text-white">
-      <style>{`
-        :root{
-          --ink-900:#0B1020; --ink-800:#131A2A; --ink-100:#EAF0FF;
-          --orange-500:#FF7A18; --orange-400:#FF9E3D; --orange-300:#FFB65E;
-          --blue-400:#3BA0F2; --blue-600:#1F6FEB; --blue-700:#0E4CC5;
-          --grad-primary: linear-gradient(135deg, #FF7A18 0%, #FFB65E 35%, #3BA0F2 70%, #1F6FEB 100%);
-        }
-        .glass {
-          background: rgba(255,255,255,.08);
-          border: 1px solid rgba(255,255,255,.12);
-          box-shadow: 0 20px 60px rgba(16,35,80,.25), inset 0 1px 0 rgba(255,255,255,.08);
-          backdrop-filter: blur(18px);
-        }
-        .ring-glow { box-shadow: 0 0 40px rgba(59,160,242,.35), 0 0 40px rgba(255,122,24,.25) inset; }
-        .grad-text {
-          background: var(--grad-primary);
-          -webkit-background-clip: text;
-          background-clip: text;
-          color: transparent;
-        }
-      `}</style>
-
-      <AmbientBokeh />
-      <GradientFog />
+    <main className="relative min-h-dvh isolate overflow-hidden bg-[#070B16] text-white">
+      <StyleTokens />
+      <AuroraMesh />
+      <Starfield />
+      <SoftVignette />
 
       <section className="relative z-10 min-h-dvh flex items-center justify-center px-4">
         <motion.div
-          className="glass ring-glow rounded-3xl w-full max-w-5xl p-6 sm:p-10"
-          initial={{ y: 16, opacity: 0 }}
+          className="glass ring-glow rounded-3xl w-full max-w-6xl p-6 sm:p-10"
+          initial={{ y: 18, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
         >
-          <div className="grid gap-8 lg:grid-cols-2 items-center">
-            {/* Left */}
+          <div className="grid gap-10 lg:grid-cols-[1.1fr,0.9fr] items-center">
+            {/* LEFT */}
             <div className="text-center lg:text-left">
-              <div className="inline-flex items-center justify-center lg:justify-start px-4 py-1.5 mb-4 rounded-full bg-white/5 border border-white/10 text-[10px] md:text-xs tracking-wide uppercase">
+              <div className="inline-flex items-center justify-center lg:justify-start px-4 py-1.5 mb-5 rounded-full bg-white/5 border border-white/10 text-[10px] md:text-xs tracking-wide uppercase">
                 ON WICHITA STATE AS IT IS IN HEAVEN
               </div>
 
@@ -89,22 +136,22 @@ export default function Page() {
                 Bible Study
               </h1>
 
-              <div className="mt-5 h-[32px] md:h-[36px] relative overflow-hidden">
+              <div className="mt-6 h-[34px] md:h-[40px] relative overflow-hidden">
                 <AnimatePresence mode="wait">
                   <motion.p
                     key={index}
-                    className="text-base md:text-lg text-white/80"
+                    className="text-base md:text-lg text-white/85"
                     initial={{ y: 16, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     exit={{ y: -12, opacity: 0 }}
-                    transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+                    transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
                   >
                     {lines[index]}
                   </motion.p>
                 </AnimatePresence>
               </div>
 
-              {/* Session banner or Action buttons */}
+              {/* Session pill OR Game buttons */}
               {showInSessionBanner ? (
                 <div className="mt-8">
                   <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-white/8 border border-white/15 text-xs md:text-sm font-semibold tracking-wide">
@@ -126,35 +173,49 @@ export default function Page() {
                 </div>
               )}
 
-             
+              {/* Instagram handle */}
+              <div className="mt-8 inline-flex items-center gap-2 text-white/80">
+                <InstagramIcon />
+                <a
+                  href="https://instagram.com/wsuaftershock"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold hover:underline"
+                >
+                  @wsuaftershock
+                </a>
+              </div>
             </div>
 
-            {/* Right: QR card with capsule switch */}
+            {/* RIGHT — QR card */}
             <motion.div
-              className="relative mx-auto w-full max-w-sm"
+              className="relative mx-auto w-full max-w-md"
               initial={{ scale: 0.98, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
+              transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
             >
               <div className="glass rounded-3xl p-6 border border-white/10">
-                {/* Capsule switch */}
+                {/* Capsule switch with 4 options */}
                 <div
                   role="tablist"
                   aria-label="QR mode"
-                  className="relative mb-4 grid grid-cols-2 gap-2 p-1 rounded-full bg-white/6 border border-white/10"
+                  className="relative mb-4 grid grid-cols-4 gap-2 p-1 rounded-full bg-white/6 border border-white/10"
                   style={{ background: "rgba(255,255,255,.06)" }}
                 >
-                  <CapsuleButton
-                    selected={qrTab === "new"}
-                    onClick={() => setQrTab("new")}
-                  >
+                  <CapsuleButton selected={qrTab === "new"} onClick={() => setQrTab("new")}>
                     New
                   </CapsuleButton>
-                  <CapsuleButton
-                    selected={qrTab === "play"}
-                    onClick={() => setQrTab("play")}
-                  >
+                  <CapsuleButton selected={qrTab === "play"} onClick={() => setQrTab("play")}>
                     Game Join
+                  </CapsuleButton>
+                  <CapsuleButton selected={qrTab === "verse"} onClick={() => setQrTab("verse")}>
+                    Bible Verse
+                  </CapsuleButton>
+                  <CapsuleButton
+                    selected={qrTab === "groupme"}
+                    onClick={() => setQrTab("groupme")}
+                  >
+                    GroupMe
                   </CapsuleButton>
                 </div>
 
@@ -167,13 +228,13 @@ export default function Page() {
                       initial={{ opacity: 0, y: 12 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -12 }}
-                      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
                     >
                       <Image
                         src={qrMeta.img}
                         alt={qrMeta.alt}
-                        width={768}
-                        height={768}
+                        width={896}
+                        height={896}
                         className="w-full h-full object-contain"
                         priority
                       />
@@ -186,12 +247,6 @@ export default function Page() {
                     <span>{qrMeta.title}</span>
                   </div>
                   <div className="mt-2 text-sm text-white/80">{qrMeta.subtitle}</div>
-
-                  {qrTab === "play" && (
-                    <div className="mt-3">
-                      
-                    </div>
-                  )}
                 </div>
               </div>
             </motion.div>
@@ -199,9 +254,54 @@ export default function Page() {
         </motion.div>
       </section>
 
+      {/* VERSE TICKER — across the bottom, subtle but readable */}
+      <div className="pointer-events-none fixed left-0 right-0 bottom-0 z-10 px-4 pb-4">
+        <motion.div
+          className="mx-auto w-full max-w-6xl rounded-2xl bg-white/6 border border-white/10 backdrop-blur-md"
+          initial={{ y: 18, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.25, duration: 0.5 }}
+        >
+          <div className="px-4 py-3">
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-semibold tracking-wide uppercase text-white/80 bg-white/10 border border-white/15 rounded-full px-2 py-1">
+                Verses
+              </span>
+              <div className="relative min-h-[22px] flex-1">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={v ? v.id : "empty"}
+                    initial={{ y: 10, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: -10, opacity: 0 }}
+                    transition={{ duration: 0.35 }}
+                    className="text-sm md:text-base text-white/90"
+                  >
+                    {v ? (
+                      <span className="opacity-90">
+                        “{v.text || "—"}”
+                        {v.reference ? (
+                          <span className="opacity-80"> — {v.reference}</span>
+                        ) : null}
+                        {v.name ? <span className="opacity-60"> · {v.name}</span> : null}
+                      </span>
+                    ) : (
+                      <span className="opacity-70">
+                        Share a verse by scanning <b>Bible Verse</b> QR.
+                      </span>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* top glow */}
       <motion.div
         aria-hidden
-        className="pointer-events-none absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-white/5 to-transparent"
+        className="pointer-events-none absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-white/5 to-transparent"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2, duration: 0.6 }}
@@ -210,7 +310,7 @@ export default function Page() {
   );
 }
 
-/* ——— small components ——— */
+/* ───────────────────────── helpers & atoms ───────────────────────── */
 
 function CapsuleButton({ selected, onClick, children }) {
   return (
@@ -231,7 +331,7 @@ function CapsuleButton({ selected, onClick, children }) {
           transition={{ type: "spring", stiffness: 320, damping: 28, mass: 0.6 }}
         />
       )}
-      <span className="relative">{children}</span>
+      <span className="relative px-2">{children}</span>
     </button>
   );
 }
@@ -265,82 +365,160 @@ function LiftButton({ href, label, variant = "solid" }) {
   );
 }
 
-function AmbientBokeh() {
-  const dots = useMemo(
+function InstagramIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" className="opacity-85" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M12 7a5 5 0 1 0 0 10a5 5 0 0 0 0-10Zm0-5c3 0 3.36.01 4.54.07c1.17.06 1.97.24 2.66.51c.72.28 1.33.66 1.93 1.26c.6.6.98 1.21 1.26 1.93c.27.69.45 1.49.51 2.66C23 9.64 23 10 23 13s-.01 3.36-.07 4.54c-.06 1.17-.24 1.97-.51 2.66c-.28.72-.66 1.33-1.26 1.93c-.6.6-1.21.98-1.93 1.26c-.69.27-1.49.45-2.66.51C15.36 24 15 24 12 24s-3.36-.01-4.54-.07c-1.17-.06-1.97-.24-2.66-.51c-.72-.28-1.33-.66-1.93-1.26c-.6-.6-.98-1.21-1.26-1.93c-.27-.69-.45-1.49-.51-2.66C1 16.36 1 16 1 13s.01-3.36.07-4.54c.06-1.17.24-1.97.51-2.66c.28-.72.66-1.33 1.26-1.93c.6-.6 1.21-.98 1.93-1.26c.69-.27 1.49-.45 2.66-.51C8.64 2 9 2 12 2Zm0 3.5a6.5 6.5 0 1 1 0 13a6.5 6.5 0 0 1 0-13Zm6.75-.5a1.25 1.25 0 1 0 0 2.5a1.25 1.25 0 0 0 0-2.5Z"
+      />
+    </svg>
+  );
+}
+
+/* ───────────────────── visuals: aurora, stars, styles ───────────────────── */
+
+function StyleTokens() {
+  return (
+    <style>{`
+      :root{
+        --ink-900:#070B16; --ink-800:#0B1020; --ink-100:#EAF0FF;
+        --orange-500:#FF7A18; --orange-400:#FF9E3D; --orange-300:#FFB65E;
+        --blue-300:#65C7FF; --blue-400:#3BA0F2; --blue-600:#1F6FEB; --blue-700:#0E4CC5; --violet-500:#7C5CFF;
+        --grad-primary: linear-gradient(135deg, #FF7A18 0%, #FFB65E 35%, #65C7FF 70%, #7C5CFF 100%);
+      }
+      .glass {
+        background: rgba(255,255,255,.075);
+        border: 1px solid rgba(255,255,255,.12);
+        box-shadow: 0 20px 70px rgba(16,35,80,.35), inset 0 1px 0 rgba(255,255,255,.08);
+        backdrop-filter: blur(18px);
+      }
+      .ring-glow { box-shadow: 0 0 60px rgba(59,160,242,.35), 0 0 48px rgba(255,122,24,.22) inset; }
+      .grad-text {
+        background: var(--grad-primary);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+    `}</style>
+  );
+}
+
+/** Aurora ribbons + subtle parallax orbs */
+function AuroraMesh() {
+  const ribbons = useMemo(
     () =>
-      Array.from({ length: 18 }).map((_, i) => ({
+      Array.from({ length: 4 }).map((_, i) => ({
         id: i,
-        size: 120 + (i % 5) * 28,
-        x: (i * 53) % 100,
-        y: (i * 29) % 100,
-        delay: (i % 7) * 0.35,
-        duration: 10 + (i % 6) * 2.5,
+        hueA: i % 2 ? "rgba(124,92,255,.35)" : "rgba(59,160,242,.33)",
+        hueB: i % 2 ? "rgba(255,122,24,.28)" : "rgba(101,199,255,.25)",
+        rot: i * 18 + (i % 2 ? -12 : 8),
+        delay: i * 0.6,
+      })),
+    []
+  );
+
+  const orbs = useMemo(
+    () =>
+      Array.from({ length: 10 }).map((_, i) => ({
+        id: i,
+        size: 220 + (i % 5) * 60,
+        left: `${(i * 9) % 100}%`,
+        top: `${(i * 13) % 100}%`,
+        dur: 18 + (i % 6) * 4,
+        del: (i % 7) * 0.8,
       })),
     []
   );
 
   return (
     <div className="absolute inset-0 -z-10 overflow-hidden">
-      <div
-        aria-hidden
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(120% 100% at 0% 0%, rgba(31,111,235,.15), transparent 55%), radial-gradient(120% 100% at 100% 100%, rgba(255,122,24,.18), transparent 55%), linear-gradient(180deg, #0B1020 0%, #0B1020 100%)",
-        }}
-      />
-      <div
-        className="absolute inset-0 opacity-[0.08] mix-blend-overlay pointer-events-none"
-        style={{
-          backgroundImage:
-            "url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%23100% height=%23100%><filter id=%22n%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%222%22 stitchTiles=%22stitch%22/></filter><rect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/></svg>')",
-        }}
-      />
-      {dots.map((d) => (
-        <motion.span
-          key={d.id}
-          className="absolute rounded-full blur-3xl"
+      {/* ribbons */}
+      {ribbons.map((r) => (
+        <motion.div
+          key={r.id}
+          className="absolute -left-1/4 -right-1/4 h-[38vh] blur-3xl"
           style={{
-            width: d.size,
-            height: d.size,
-            left: `${d.x}%`,
-            top: `${d.y}%`,
+            top: `${12 + r.id * 18}vh`,
+            background: `linear-gradient(90deg, ${r.hueA}, ${r.hueB})`,
+            transform: `rotate(${r.rot}deg)`,
+            opacity: 0.55,
+          }}
+          initial={{ x: -40, opacity: 0.2 }}
+          animate={{ x: 40, opacity: 0.55 }}
+          transition={{ repeat: Infinity, repeatType: "mirror", duration: 12, delay: r.delay }}
+        />
+      ))}
+
+      {/* floating orbs */}
+      {orbs.map((o) => (
+        <motion.span
+          key={o.id}
+          className="absolute rounded-full blur-[80px]"
+          style={{
+            width: o.size,
+            height: o.size,
+            left: o.left,
+            top: o.top,
             background:
-              d.id % 2 === 0
-                ? "radial-gradient(circle at 30% 30%, rgba(59,160,242,.55), rgba(59,160,242,0))"
-                : "radial-gradient(circle at 70% 70%, rgba(255,122,24,.55), rgba(255,122,24,0))",
+              o.id % 2 === 0
+                ? "radial-gradient(circle at 30% 30%, rgba(59,160,242,.35), rgba(59,160,242,0))"
+                : "radial-gradient(circle at 70% 70%, rgba(255,122,24,.32), rgba(255,122,24,0))",
           }}
-          initial={{ y: 0, opacity: 0.6 }}
-          animate={{ y: [0, -16, 0], opacity: [0.6, 0.85, 0.6] }}
-          transition={{
-            repeat: Infinity,
-            duration: d.duration,
-            delay: d.delay,
-            ease: "easeInOut",
-          }}
+          initial={{ y: 0, opacity: 0.5 }}
+          animate={{ y: [0, -22, 0], opacity: [0.45, 0.7, 0.45] }}
+          transition={{ repeat: Infinity, duration: o.dur, delay: o.del, ease: "easeInOut" }}
         />
       ))}
     </div>
   );
 }
 
-function GradientFog() {
+/** dim star specks */
+function Starfield() {
+  const stars = useMemo(
+    () =>
+      Array.from({ length: 120 }).map((_, i) => ({
+        id: i,
+        x: Math.random() * 100,
+        y: Math.random() * 100,
+        s: Math.random() * 1.2 + 0.3,
+        d: 2 + Math.random() * 3,
+      })),
+    []
+  );
   return (
-    <div className="absolute inset-0 -z-10 pointer-events-none">
-      <div
-        className="absolute -top-24 -left-24 w-[520px] h-[520px] rounded-full opacity-40 blur-[120px]"
+    <div className="absolute inset-0 -z-10 overflow-hidden">
+      {stars.map((s) => (
+        <motion.span
+          key={s.id}
+          className="absolute rounded-full"
+          style={{
+            left: `${s.x}%`,
+            top: `${s.y}%`,
+            width: s.s,
+            height: s.s,
+            background: "rgba(255,255,255,.65)",
+            filter: "blur(.5px)",
+          }}
+          animate={{ opacity: [0.15, 0.6, 0.15] }}
+          transition={{ repeat: Infinity, duration: s.d, delay: s.id * 0.02 }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SoftVignette() {
+  return (
+    <div className="pointer-events-none absolute inset-0 -z-10">
+      <div className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(50% 50% at 50% 50%, #1F6FEB 0%, rgba(31,111,235,0) 70%)",
+            "radial-gradient(120% 100% at 0% 0%, rgba(31,111,235,.14), transparent 55%), radial-gradient(120% 100% at 100% 100%, rgba(255,122,24,.16), transparent 55%)",
         }}
       />
-      <div
-        className="absolute -bottom-24 -right-24 w-[520px] h-[520px] rounded-full opacity-40 blur-[120px]"
-        style={{
-          background:
-            "radial-gradient(50% 50% at 50% 50%, #FF7A18 0%, rgba(255,122,24,0) 70%)",
-        }}
-      />
+      <div className="absolute inset-0" style={{ boxShadow: "inset 0 0 220px rgba(0,0,0,.55)" }} />
     </div>
   );
 }
