@@ -6,7 +6,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import "./firebaseConfig";
-
 import {
   getFirestore,
   collection,
@@ -18,10 +17,10 @@ import {
 
 export default function Page() {
   const db = useMemo(() => getFirestore(), []);
-  const [qrTab, setQrTab] = useState("new"); // "new" | "play" | "groupme"
+  const [qrTab, setQrTab] = useState("new");
   const [timeStr, setTimeStr] = useState("");
 
-  // live clock
+  // Clock
   useEffect(() => {
     const t = setInterval(() => {
       const d = new Date();
@@ -33,16 +32,12 @@ export default function Page() {
     return () => clearInterval(t);
   }, []);
 
-  // verse feed
-  const [verses, setVerses] = useState([]); // [{id,text,reference,name}]
+  // Verses
+  const [verses, setVerses] = useState([]);
   const [vIx, setVIx] = useState(0);
 
   useEffect(() => {
-    const qV = query(
-      collection(db, "verses"),
-      orderBy("createdAt", "desc"),
-      fsLimit(30)
-    );
+    const qV = query(collection(db, "verses"), orderBy("createdAt", "desc"), fsLimit(30));
     const unsub = onSnapshot(qV, (snap) => {
       const rows = [];
       snap.forEach((d) => rows.push({ id: d.id, ...d.data() }));
@@ -62,25 +57,10 @@ export default function Page() {
 
   const qrMeta =
     qrTab === "new"
-      ? {
-          title: "New Form",
-          subtitle: "Scan if this is your first time here :)",
-          img: "/WelcomeCode.png",
-          alt: "Aftershock New/Housekeeping Form QR",
-        }
+      ? { title: "New Form", subtitle: "Scan if this is your first time here :)", img: "/WelcomeCode.png" }
       : qrTab === "play"
-      ? {
-          title: "Game Join (opens /play)",
-          subtitle: "Scan to open the Play screen on your phone",
-          img: "/GameJoin.png",
-          alt: "Aftershock Game Join QR — opens /play",
-        }
-      : {
-          title: "GroupMe",
-          subtitle: "Scan to join our GroupMe",
-          img: "/GroupMe.png",
-          alt: "Aftershock GroupMe QR",
-        };
+      ? { title: "Game Join (opens /play)", subtitle: "Scan to open the Play screen", img: "/GameJoin.png" }
+      : { title: "GroupMe", subtitle: "Scan to join our GroupMe", img: "/GroupMe.png" };
 
   const showGameButtons = qrTab === "play";
   const showInSessionBanner = qrTab === "new";
@@ -92,10 +72,12 @@ export default function Page() {
       <StarsEnhanced />
       <SoftVignette />
 
-      {/* CONTENT: two-column, perfectly centered */}
-      <section className="relative z-10 h-full max-w-6xl mx-auto px-4 grid items-center"
-        style={{ gridTemplateColumns: "1.05fr 0.95fr" }}>
-        {/* LEFT: headline & chips */}
+      {/* MAIN GRID */}
+      <section
+        className="relative z-10 h-full max-w-6xl mx-auto px-4 grid items-center gap-20"
+        style={{ gridTemplateColumns: "1.05fr 0.95fr" }} // <— added gap between left/right
+      >
+        {/* LEFT */}
         <div className="flex flex-col items-start justify-center">
           <div className="w-full flex items-center justify-between gap-3 mb-4">
             <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-white/6 border border-white/12 text-[10px] md:text-xs tracking-wide uppercase">
@@ -105,17 +87,18 @@ export default function Page() {
           </div>
 
           <h1 className="text-5xl md:text-7xl font-semibold tracking-[-0.02em] leading-tight grad-text">
-            Welcome to <span className="whitespace-nowrap">Aftershock Bible Study</span>
+            Welcome to <br className="hidden md:block" />
+            Aftershock Bible Study
           </h1>
 
           <p className="mt-4 text-white/85 text-base md:text-lg">
-            Reverent fun · communal hype · sacred + playful.
+           To help Students find their true purpose through the Word of God
           </p>
 
           <div className="mt-6">
             {showInSessionBanner ? (
               <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-white/8 border border-white/15 text-xs md:text-sm font-semibold tracking-wide">
-                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: "#14D1A4" }} />
+                <span className="inline-block h-2 w-2 rounded-full bg-[#14D1A4]" />
                 BIBLE STUDY IS IN SESSION
               </div>
             ) : showGameButtons ? (
@@ -126,7 +109,6 @@ export default function Page() {
             ) : null}
           </div>
 
-          {/* Instagram handle */}
           <div className="mt-8 inline-flex items-center gap-2 text-white/85">
             <InstagramIcon />
             <a
@@ -140,7 +122,7 @@ export default function Page() {
           </div>
         </div>
 
-        {/* RIGHT: QR card */}
+        {/* RIGHT */}
         <motion.div
           className="justify-self-center w-full max-w-md"
           initial={{ y: 16, opacity: 0 }}
@@ -149,11 +131,7 @@ export default function Page() {
         >
           <div className="glass ring-glow rounded-3xl border border-white/10 p-6">
             {/* tabs */}
-            <div
-              role="tablist"
-              aria-label="QR mode"
-              className="relative mb-4 grid grid-cols-3 gap-2 p-1 rounded-full bg-white/6 border border-white/10"
-            >
+            <div className="relative mb-4 grid grid-cols-3 gap-2 p-1 rounded-full bg-white/6 border border-white/10">
               <CapsuleButton selected={qrTab === "new"} onClick={() => setQrTab("new")}>New</CapsuleButton>
               <CapsuleButton selected={qrTab === "play"} onClick={() => setQrTab("play")}>Game Join</CapsuleButton>
               <CapsuleButton selected={qrTab === "groupme"} onClick={() => setQrTab("groupme")}>GroupMe</CapsuleButton>
@@ -168,11 +146,11 @@ export default function Page() {
                   initial={{ opacity: 0, scale: 0.975, y: 10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.985, y: -8 }}
-                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                  transition={{ duration: 0.28 }}
                 >
                   <Image
                     src={qrMeta.img}
-                    alt={qrMeta.alt}
+                    alt="QR code"
                     width={896}
                     height={896}
                     className="w-full h-full object-contain"
@@ -182,10 +160,9 @@ export default function Page() {
               </AnimatePresence>
             </div>
 
-            {/* label */}
             <div className="mt-4 text-center">
               <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-wide text-white/80 bg-white/6 border border-white/12 rounded-full px-3 py-1">
-                <span>{qrMeta.title}</span>
+                {qrMeta.title}
               </div>
               <div className="mt-2 text-sm text-white/85">{qrMeta.subtitle}</div>
             </div>
@@ -193,7 +170,7 @@ export default function Page() {
         </motion.div>
       </section>
 
-      {/* VERSE BAR — small BibleVerse QR + rotating verse */}
+      {/* VERSE BAR */}
       <div className="fixed left-0 right-0 bottom-0 z-10 px-4 pb-4">
         <motion.div
           className="mx-auto w-full max-w-6xl rounded-2xl bg-white/7 border border-white/12 backdrop-blur-md"
@@ -202,22 +179,12 @@ export default function Page() {
           transition={{ delay: 0.2, duration: 0.45 }}
         >
           <div className="flex items-center gap-4 p-3">
-            {/* small QR */}
             <div className="flex items-center gap-2 pl-1 pr-3">
               <div className="rounded-xl overflow-hidden border border-white/14 bg-white/10">
-                <Image
-                  src="/BibleVerseQR.png"  // <-- your saved filename
-                  width={64}
-                  height={64}
-                  alt="Bible Verse QR"
-                />
+                <Image src="/BibleVerseQR.png" width={64} height={64} alt="Bible Verse QR" />
               </div>
-              <div className="text-[11px] uppercase tracking-wide text-white/85">
-                Verses
-              </div>
+              <div className="text-[11px] uppercase tracking-wide text-white/85">Verses</div>
             </div>
-
-            {/* verse text */}
             <div className="flex-1 min-h-[22px]">
               <AnimatePresence mode="wait">
                 <motion.div
@@ -231,8 +198,8 @@ export default function Page() {
                   {v ? (
                     <span>
                       “{v.text || "—"}”
-                      {v.reference ? <span className="opacity-85"> — {v.reference}</span> : null}
-                      {v.name ? <span className="opacity-70"> · {v.name}</span> : null}
+                      {v.reference && <span className="opacity-85"> — {v.reference}</span>}
+                      {v.name && <span className="opacity-70"> · {v.name}</span>}
                     </span>
                   ) : (
                     <span className="opacity-85">Share a verse anytime — scan the QR.</span>
@@ -240,7 +207,6 @@ export default function Page() {
                 </motion.div>
               </AnimatePresence>
             </div>
-
             <div className="pr-2">
               <Link
                 href="/verse"
@@ -252,20 +218,11 @@ export default function Page() {
           </div>
         </motion.div>
       </div>
-
-      {/* top soft glow */}
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-white/5 to-transparent"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.2, duration: 0.6 }}
-      />
     </main>
   );
 }
 
-/* ───────────── atoms ───────────── */
+/* ──────────────────── Components ──────────────────── */
 
 function TimeBadge({ timeStr }) {
   return (
@@ -327,7 +284,6 @@ function LiftButton({ href, label, variant = "solid" }) {
     </motion.div>
   );
 }
-
 function InstagramIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" className="opacity-90" aria-hidden>
@@ -339,8 +295,7 @@ function InstagramIcon() {
   );
 }
 
-/* ───────────── visuals ───────────── */
-
+/* from previous version, unchanged: AuroraLayers, StarsEnhanced, SoftVignette */
 function StyleTokens() {
   return (
     <style>{`
